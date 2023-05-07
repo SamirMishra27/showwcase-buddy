@@ -1,0 +1,11 @@
+{
+    "STAGE": "BETA / PROD",
+    "PREFIX_PROD": "Bot's command prefix",
+    "PREFIX_BETA": "Bot's command prefix",
+
+    "SHOWWCASE_API_KEY": "Your Showwcase account's API Key",
+    
+    "BOT_TOKEN_PROD": "Put the bot's token here.",
+    "BOT_TOKEN_BETA": "Put the bot's token here.",
+    "BOT_CLIENT_SECRET": "Put the bot's secret here."
+}
