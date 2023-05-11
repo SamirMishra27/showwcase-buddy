@@ -23,7 +23,7 @@ class RoadmapsView(CustomView):
         self.embed: Embed = None
 
     async def interaction_check(self, interaction: MessageInteraction) -> bool:
-        if interaction.user.id == self.author.id:
+        if interaction.user.id == self.author.id and interaction.message.id == self.message.id:
             return True
         else:
             await interaction.response.send_message('This is not for you!', ephemeral = True)
@@ -50,11 +50,39 @@ class RoadmapsView(CustomView):
         await self.update_embed_page()
         await interaction.response.edit_message(embed = self.embed, view = self)
 
+    @button(label = 'READ MORE', custom_id = 'ABOUT', style = ButtonStyle.green, row = 2)
+    async def show_about_button(self, button: Button, interaction: MessageInteraction):
+
+        page_content = self.data[self.curr_page]
+        about_content = page_content['about']
+        site_url = f"https://www.showwcase.com/roadmap/{ page_content['id'] }/{ page_content['slug'] }"
+
+        embed = Embed(
+            title = page_content['title'],
+            colour = int(page_content['color'][1:], base = 16)
+        )
+        embed.set_author(
+            name = 'Showwcase Roadmaps - Learn',
+            url = 'https://www.showwcase.com/explore',
+            icon_url = self.bot.user.display_avatar.url
+        )
+        embed.set_footer(text = 'Learn from Showwcase! 📘')
+        embed.set_thumbnail(url = SHOWWCASE_LOGO)
+
+        if len(about_content) > 4080: # Embed desc limit 4096
+            embed.description = about_content[:4080] + '...'
+
+        else:
+            embed.description = about_content
+
+        go_to_roadmap_button = Button(label = 'GO TO ROADMAP', url = site_url)
+        await interaction.response.send_message(embed = embed, ephemeral = True, components = [go_to_roadmap_button])
+
     async def update_embed_page(self):
 
         time_parse_format = '%Y-%m-%dT%H:%M:%S.%fZ'
         page_content = self.data[self.curr_page]
-        site_url = f"https://www.showwcase.com/roadmap/{ page_content['id'] }/{ page_content['slug'] }"
+        roadmap_site_url = f"https://www.showwcase.com/roadmap/{ page_content['id'] }/{ page_content['slug'] }"
 
         embed = Embed(
             title = page_content['title'],
@@ -89,7 +117,7 @@ class RoadmapsView(CustomView):
         )
 
         embed.add_field(
-            name = capwords(page_content['info']['jobs']['label']) + '💼',
+            name = capwords(page_content['info']['jobs']['label']) + ' 💼',
             value = '**' + page_content['info']['jobs']['total'] + '**',
             inline = True
         )
@@ -109,10 +137,10 @@ class RoadmapsView(CustomView):
         self.get_child_by(id = 'PAGE_NO').label = f'{self.curr_page + 1} / {len(self.data)}'
 
         if self.get_child_by(label = 'GO TO ROADMAP'):
-            self.get_child_by(label = 'GO TO ROADMAP').url = site_url
+            self.get_child_by(label = 'GO TO ROADMAP').url = roadmap_site_url
 
         else:
-            self.add_item(Button(label = 'GO TO ROADMAP', url = site_url))
+            self.add_item(Button(label = 'GO TO ROADMAP', url = roadmap_site_url))
 
     def check_disability(self):
         self.enable_all_children()

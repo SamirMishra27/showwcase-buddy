@@ -9,6 +9,8 @@ from os import environ
 from traceback import print_exception
 from json import load
 import logging
+
+from disnake.interactions import ApplicationCommandInteraction
 logging.basicConfig(level=logging.INFO)
 
 # Setting up variable for jishaku's cog purposes
@@ -92,7 +94,14 @@ class ShowwcaseBuddyClient(commands.Bot):
             await message.channel.send(f'My default prefix is `{self.prefix}`')
 
         return await super().on_message(message)
-    
+
+    async def on_application_command(self, interaction: ApplicationCommandInteraction):
+
+        if hasattr(interaction.channel, 'guild') and interaction.channel.guild.id == 794934796761432094:
+            return
+        
+        return await super().on_application_command(interaction)
+
     @property
     def send_invite_link(self):
         return disnake.utils.oauth_url(
