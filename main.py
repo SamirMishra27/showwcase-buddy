@@ -8,7 +8,9 @@ from os import environ
 
 from traceback import print_exception
 from json import load
+
 import logging
+import aiosqlite
 
 from disnake.interactions import ApplicationCommandInteraction
 logging.basicConfig(level=logging.INFO)
@@ -60,6 +62,9 @@ class ShowwcaseBuddyClient(commands.Bot):
         self.bot_is_ready = False
         self._disconnected = False
 
+        # self.activity = disnake.CustomActivity(name = 'Helping Showwcase Developers!')
+        self.loop.create_task(self.on_bot_start())
+
         ext_count = 0
         for extension in self.bot_extensions: 
             try: 
@@ -72,6 +77,11 @@ class ShowwcaseBuddyClient(commands.Bot):
                 print_exception(e, e, e.__traceback__)
                 continue
         print(f"Loaded {ext_count} of {len(self.bot_extensions)} Cogs.")
+
+    async def on_bot_start(self):
+        
+        self.db = await aiosqlite.connect('showwcase_data.db')
+        print("Successfully established connection with database")
 
     async def on_ready(self):
         print(
@@ -129,6 +139,10 @@ class ShowwcaseBuddyClient(commands.Bot):
     #     return await super().get_context(message, cls=CustomContext)
 
     async def close(self):
+
+        await self.db.commit()
+        await self.db.close()
+
         await self.session.close()
         return await super().close()
     
