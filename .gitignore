@@ -1,5 +1,7 @@
 # Custom files to ignore
 config.json
+showwcase_data.db
+showwcase_data.db-journal
 
 roughcode.txt
 pyvenv.cfg
