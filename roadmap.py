@@ -1,4 +1,4 @@
-from disnake import CommandInteraction, MessageInteraction, ButtonStyle, Embed, Message
+from disnake import CommandInteraction, MessageInteraction, ButtonStyle, Embed, Message, Colour
 from disnake.ui import button, Button
 from disnake.ext import commands
 
@@ -7,6 +7,24 @@ from utils import SHOWWCASE_LOGO
 
 from datetime import datetime
 from string import capwords
+from textwrap import shorten
+from json import loads
+
+class RedirectButton(Button):
+
+    def __init__(self, style, label, custom_id, emoji, row, func_name):
+        super().__init__(
+            style = style,
+            label = label,
+            disabled = False,
+            custom_id = custom_id,
+            emoji = emoji,
+            row = row
+        )
+        self.func_name = func_name
+
+    async def callback(self, interaction: MessageInteraction):
+        return await getattr(self.view, self.func_name)(interaction)
 
 class SeriesView(CustomView):
 
@@ -134,6 +152,56 @@ class RoadmapsView(CustomView):
         else:
             await interaction.response.send_message('This is not for you!', ephemeral = True)
 
+    async def update_learning_button(self, roadmap_id):
+
+        query = 'SELECT * FROM roadmaps WHERE user_id = (?) AND roadmap_id = (?)'
+        results = await self.bot.db.execute_fetchall(query, (self.author.id, roadmap_id))
+
+        if not results:
+            self.remove_item(self.get_child_by(id = 'CONTINUE_LEARNING'))
+
+            self.add_item(RedirectButton(
+                ButtonStyle.green, 'START LEARNING!',
+                'START_LEARNING', None, 2, 'start_roadmap_for_user'
+            ))
+
+        else:
+            self.remove_item(self.get_child_by(id = 'START_LEARNING'))
+
+            self.add_item(RedirectButton(
+                ButtonStyle.blurple, 'CONTINUE LEARNING!',
+                'CONTINUE_LEARNING', None, 2, 'continue_roadmap_for_user'
+            ))
+
+    async def start_roadmap_for_user(self, interaction: MessageInteraction):
+        ...
+
+    async def continue_roadmap_for_user(self, interaction: MessageInteraction):
+
+        roadmap_api_data = self.data[self.curr_page]
+        roadmap_id = roadmap_api_data['id']
+        user_id = self.author.id
+
+        api_response = await self.bot.session.get(f'https://cache.showwcase.com/roadmaps/{roadmap_id}/series')
+        roadmap_series_data = await api_response.json()
+
+        query = 'SELECT * FROM roadmaps WHERE user_id = (?) AND roadmap_id = (?)'
+        sql_data = await self.bot.db.execute_fetchall(query, (user_id, roadmap_id))
+
+        sql_data = sql_data[0]
+        roadmap_learning_data = [
+            sql_data[0], sql_data[1], sql_data[2], loads(sql_data[3]),
+            loads(sql_data[4]), sql_data[5], sql_data[6]
+        ]
+        # Convert is_finished as well
+
+        view = RoadmapLearningView(
+            self.author, self.bot, roadmap_api_data,
+            roadmap_series_data, roadmap_learning_data
+        )
+        resp_message = await interaction.response.send_message(embed = view.embed, view = view, ephemeral = True)
+        await view.resolve_message(interaction, resp_message)
+
     @button(label = 'LAST', custom_id = 'PAGE_LEFT', style = ButtonStyle.blurple, disabled = True)
     async def page_left_button(self, button: Button, interaction: MessageInteraction):
 
@@ -204,7 +272,10 @@ class RoadmapsView(CustomView):
 
         time_parse_format = '%Y-%m-%dT%H:%M:%S.%fZ'
         page_content = self.data[self.curr_page]
+
         roadmap_site_url = f"https://www.showwcase.com/roadmap/{ page_content['id'] }/{ page_content['slug'] }"
+        roadmap_id = page_content['id']
+        await self.update_learning_button(roadmap_id)
 
         embed = Embed(
             title = page_content['title'],
