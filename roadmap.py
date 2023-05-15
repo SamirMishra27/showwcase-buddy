@@ -26,6 +26,226 @@ class RedirectButton(Button):
     async def callback(self, interaction: MessageInteraction):
         return await getattr(self.view, self.func_name)(interaction)
 
+class RoadmapLearningView(CustomView):
+
+    def __init__(
+            self, author, bot, roadmap_api_data,
+            roadmap_series_data, roadmap_learning_data, *, timeout = 180
+        ):
+            super().__init__(clear_on_timeout = False, timeout = timeout)
+
+            self.author = author
+            self.bot = bot
+
+            self.roadmap_api_data = roadmap_api_data
+            self.roadmap_site_url = 'https://www.showwcase.com/roadmap/{id}/{slug}?tab=roadmap'.format(**self.roadmap_api_data)
+
+            self.roadmap_series_data = roadmap_series_data
+            self.roadmap_learning_data = roadmap_learning_data
+
+            self.curr_page = 0
+            self.last_page = -1
+            self.category = 'OVERVIEW'
+
+            self.message: Message = None
+            self.embed: Embed = None
+
+            self.add_item(Button(label = 'VIEW ON SHOWWCASE', url = self.roadmap_site_url))
+            for series in self.roadmap_series_data:
+                self.last_page += len(series['projects'])
+
+            self.overview_embed: Embed = None
+            self.make_overview_embed()
+
+    async def interaction_check(self, interaction: MessageInteraction) -> bool:
+        if interaction.user.id == self.author.id and interaction.message.id == self.message.id:
+            return True
+        else:
+            await interaction.response.send_message('This is not for you!', ephemeral = True)
+
+    def make_overview_embed(self):
+
+        embed = Embed(
+            colour = Colour.purple(),
+            description = self.roadmap_api_data['info']['description']
+        )
+        embed.set_author(
+            name = 'LEARN - ' + self.roadmap_api_data['title'],
+            url = self.roadmap_site_url
+        )
+        embed.set_thumbnail(url = SHOWWCASE_LOGO)
+        embed.set_footer(text = 'Keep Learning! 🙌')
+
+        embed.add_field(
+            name = 'You have completed',
+            value = str(self.roadmap_learning_data[5]) + ' %',
+            inline = False
+        )
+
+        embed.add_field(
+            name = 'Topics Completed',
+            value = f"{ len(self.roadmap_learning_data[3]) } / { len(self.roadmap_series_data) }",
+            inline = False
+        )
+
+        embed.add_field(
+            name = 'Articles Completed',
+            value = f"{ len(self.roadmap_learning_data[4]) } / { self.last_page + 1 }",
+            inline = False
+        )
+        self.overview_embed = embed
+        self.embed = embed
+
+    async def mark_show_as_complete(self, show_id):
+        ...
+    
+    async def mark_show_as_incomplete(self, show_id):
+        ...
+
+    @button(label = 'VIEW LEARNING', custom_id = 'TOGGLE_VIEW', style = ButtonStyle.green)
+    async def view_roadmap_learning_button(self, button: Button, interaction: MessageInteraction):
+
+        if self.category == 'OVERVIEW':
+            self.category = 'LEARNING'
+
+            for button_info in [
+                ['LAST', 'PAGE_LEFT', ButtonStyle.gray, 2, 'page_left_button'],
+                ['READ THIS', 'VIEW_CURR_SHOW', ButtonStyle.green, 2, 'read_curr_show_button'],
+                ['NEXT', 'PAGE_RIGHT', ButtonStyle.gray, 2, 'page_right_button']
+            ]:
+                self.add_item(RedirectButton(
+                    label = button_info[0], custom_id = button_info[1],
+                    style = button_info[2], emoji = None, row = button_info[3],
+                    func_name = button_info[4]
+                ))
+
+            button.label = 'GO BACK'
+            button.style = ButtonStyle.blurple
+
+            await self.update_learning_embed()
+            self.get_child_by(id = 'PAGE_LEFT').disabled = True
+
+        else: # self.category == 'LEARNING'
+            self.category = 'OVERVIEW'
+
+            button.label = 'VIEW LEARNING'
+            button.style = ButtonStyle.green
+            self.embed = self.overview_embed
+
+            for child_id in ('PAGE_LEFT', 'VIEW_CURR_SHOW', 'PAGE_RIGHT'):
+                self.remove_item(self.get_child_by(id = child_id))
+
+        await interaction.response.edit_message(embed = self.embed, view = self)
+
+    async def page_left_button(self, interaction: MessageInteraction):
+
+        self.curr_page -=  1
+        self.check_disability()
+
+        await self.update_learning_embed()
+        await interaction.response.edit_message(embed = self.embed, view = self)
+
+    async def page_right_button(self, interaction: MessageInteraction):
+        
+        self.curr_page += 1
+        self.check_disability()
+
+        await self.update_learning_embed()
+        await interaction.response.edit_message(embed = self.embed, view = self)
+
+    async def read_curr_show_button(self, interaction: MessageInteraction):
+
+        view = ShowArticleView(
+            self.author, self.bot,
+            self.current_show_id,
+            self.current_show_api_data,
+            self.roadmap_learning_data, self
+        )
+        await view.update_show_article_page()
+
+        resp_message = await interaction.response.send_message(embed = view.embed, view = view, ephemeral = True)
+        await view.resolve_message(interaction, resp_message)
+
+    async def update_learning_embed(self):
+
+        loop_index = 0
+        for series in self.roadmap_series_data:
+
+            found = False
+            for show in series['projects']:
+                if loop_index == self.curr_page:
+
+                    current_series = series
+                    total_shows_in_series = len(series['projects'])
+
+                    series_index = self.roadmap_series_data.index(series)
+                    show_index = series['projects'].index(show)
+                    current_show_id = show['id']
+
+                    found = True
+                    break
+
+                else:
+                    loop_index += 1
+                    continue
+            
+            if found: break
+            else: continue
+
+        else: 
+            return
+
+        api_response = await self.bot.session.get(f'https://cache.showwcase.com/projects/{current_show_id}')
+        show_article_data = await api_response.json()
+        
+        self.current_show_id = current_show_id
+        self.current_show_api_data = show_article_data
+
+        series_view_progress_bar = '――'.join([ ('▶' if i == show_index else '▷') for i in range(total_shows_in_series) ])
+        embed_description = (
+            f"#{ series_index + 1 } - **{ current_series['title'] }**\n"
+            f"{ series_view_progress_bar }\n"
+        )
+        reading_time = show_article_data['readingStats']['text']
+        reading_status = 'Marked as completed ✅' if current_show_id in self.roadmap_learning_data[4] else ''
+
+        embed = Embed(
+            colour = Colour.purple(),
+            description = embed_description
+        )
+        embed.set_author(
+            name = 'LEARN - ' + self.roadmap_api_data['title'],
+            url = self.roadmap_site_url
+        )
+        embed.set_thumbnail(url = SHOWWCASE_LOGO)
+
+        embed.add_field(
+            name = show_article_data['title'],
+            value = f'{reading_time} \n{reading_status} ⏱️',
+            inline = False
+        )
+
+        embed.set_image(url = show_article_data['coverImage'])
+        self.embed = embed
+
+        self.get_child_by(id = 'VIEW_CURR_SHOW').label = shorten(show_article_data['title'], width = 30, placeholder = '...')
+
+    def check_disability(self):
+
+        self.enable_all_children()
+        if self.category == 'OVERVIEW':
+            return
+
+        if self.curr_page == 0:
+            self.get_child_by(id = 'PAGE_LEFT').disabled = True
+
+        if self.curr_page == self.last_page:
+            self.get_child_by(id = 'PAGE_RIGHT').disabled = True
+
+    async def teardown(self):
+        self.disable_all_children()
+        await self.message.edit(embed = self.embed, view = self)
+
 class SeriesView(CustomView):
 
     def __init__(self, author, bot, roadmap_data, series_data, *, timeout = 180):
