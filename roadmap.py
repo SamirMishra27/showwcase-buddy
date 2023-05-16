@@ -1,4 +1,4 @@
-from disnake import CommandInteraction, MessageInteraction, ButtonStyle, Embed, Message, Colour
+from disnake import CommandInteraction, MessageInteraction, ButtonStyle, Embed, Message, Colour, OptionChoice
 from disnake.ui import button, Button
 from disnake.ext import commands
 
@@ -194,15 +194,12 @@ class RoadmapLearningView(CustomView):
             self.roadmap_learning_data: RoadmapProgress = roadmap_learning_data
 
             self.curr_page = 0
-            self.last_page = -1
+            self.last_page = self.roadmap_series_data.show_articles_count - 1
             self.category = 'OVERVIEW'
 
             self.message: Message = None
             self.embed: Embed = None
-
             self.add_item(Button(label = 'VIEW ON SHOWWCASE', url = self.roadmap_site_url))
-            for series in self.roadmap_series_data:
-                self.last_page += len(series['projects'])
 
             self.overview_embed: Embed = None
             self.make_overview_embed()
@@ -246,11 +243,40 @@ class RoadmapLearningView(CustomView):
         self.overview_embed = embed
         self.embed = embed
 
+    def update_completion_percentage(self) -> None:
+
+        shows_completed = len(self.roadmap_learning_data.completed_shows)
+        total_shows = self.roadmap_series_data.show_articles_count
+            
+        self.roadmap_learning_data.completion_percentage = round((shows_completed / total_shows) * 100, 2)
+
     async def mark_show_as_complete(self, show_id):
-        ...
-    
+        
+        self.roadmap_learning_data.add_show(show_id)
+        current_series = self.roadmap_series_data.find_series_by_show_id(show_id)
+
+        if all([
+            show['id'] in self.roadmap_learning_data.completed_shows \
+            for show in current_series['projects']
+        ]):
+            self.roadmap_learning_data.add_series(current_series['id'])
+
+        self.update_completion_percentage()
+        await self.roadmap_learning_data.save_progress()
+
     async def mark_show_as_incomplete(self, show_id):
-        ...
+
+        self.roadmap_learning_data.remove_show(show_id)
+        current_series = self.roadmap_series_data.find_series_by_show_id(show_id)
+
+        if all([
+            show['id'] not in self.roadmap_learning_data.completed_series \
+            for show in current_series['projects']
+        ]):
+            self.roadmap_learning_data.remove_series(current_series['id'])
+
+        self.update_completion_percentage()
+        await self.roadmap_learning_data.save_progress()
 
     @button(label = 'VIEW LEARNING', custom_id = 'TOGGLE_VIEW', style = ButtonStyle.green)
     async def view_roadmap_learning_button(self, button: Button, interaction: MessageInteraction):
@@ -324,32 +350,12 @@ class RoadmapLearningView(CustomView):
 
     async def update_learning_embed(self):
 
-        loop_index = 0
-        for series in self.roadmap_series_data:
-
-            found = False
-            for show in series['projects']:
-                if loop_index == self.curr_page:
-
-                    current_series = series
-                    total_shows_in_series = len(series['projects'])
-
-                    series_index = self.roadmap_series_data.index(series)
-                    show_index = series['projects'].index(show)
-                    current_show_id = show['id']
-
-                    found = True
-                    break
-
-                else:
-                    loop_index += 1
-                    continue
-            
-            if found: break
-            else: continue
-
-        else: 
-            return
+        current_series, current_show = self.roadmap_series_data[self.curr_page]
+        total_shows_in_series = len(current_series['projects'])
+        
+        series_index = self.roadmap_series_data.roadmap_series_data.index(current_series)
+        show_index = current_series['projects'].index(current_show)
+        current_show_id = current_show['id']
 
         api_response = await self.bot.session.get(f'https://cache.showwcase.com/projects/{current_show_id}')
         show_article_data = await api_response.json()
@@ -783,7 +789,7 @@ class Roadmap(commands.Cog):
             interaction.author, self.bot, roadmap_api_data,
             roadmap_series_data, roadmap_learning_data, timeout = 600
         )
-        resp_message = await interaction.response.send_message(embed = view.embed, view = view, ephemeral = True)
+        resp_message = await interaction.send(embed = view.embed, view = view, ephemeral = True)
         await view.resolve_message(interaction, resp_message)
 
 def setup(bot: commands.bot):
