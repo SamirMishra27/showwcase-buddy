@@ -26,6 +26,138 @@ class RedirectButton(Button):
     async def callback(self, interaction: MessageInteraction):
         return await getattr(self.view, self.func_name)(interaction)
 
+class ShowArticleView(CustomView):
+
+    def __init__(
+            self, author, bot,
+            show_id,
+            show_article_data,
+            roadmap_learning_data,
+            roadmap_learning_view,
+            *, timeout = 180
+        ):
+            super().__init__(clear_on_timeout = False, timeout = timeout)
+
+            self.author = author
+            self.bot = bot
+
+            self.show_id = show_id
+            self.show_article_data = show_article_data
+            self.show_site_url = "https://www.showwcase.com/show/{id}/{slug}".format(**show_article_data)
+
+            self.roadmap_learning_data: RoadmapProgress = roadmap_learning_data
+            self.roadmap_learning_view: RoadmapLearningView = roadmap_learning_view
+
+            self.curr_page = 0
+            self.show_article_parts = []
+            self.parts_per_page = 5
+
+            self.message: Message = None
+            self.embed: Embed = None
+
+            self.add_item(Button(label = 'READ ON SHOWWCASE', url = self.show_site_url, row = 1))
+            self.make_show_article()
+
+    async def interaction_check(self, interaction) -> bool:
+        if interaction.user.id == self.author.id and interaction.message.id == self.message.id:
+            return True
+        else:
+            await interaction.response.send_message('This is not for you!', ephemeral = True)
+
+    def make_show_article(self):
+
+        show_article_content = self.show_article_data['content'][0]['lexicalBlock']['html']
+        show_article_markdown = markdownify(show_article_content, heading_style = 'ATX_CLOSED')
+
+        show_article_markdown = sub('[#]{1,6}', '**', show_article_markdown)
+        self.show_article_parts = show_article_markdown.split('\n\n')
+
+        if len(self.show_article_parts) > 5:
+
+            for button_info in [
+                ['LAST', 'PAGE_LEFT', ButtonStyle.blurple, '◀️', 0, 'page_left_button'],
+                ['NEXT', 'PAGE_RIGHT', ButtonStyle.blurple, '▶️', 0, 'page_right_button']
+            ]:
+                self.add_item(RedirectButton(
+                    label = button_info[0], custom_id = button_info[1],
+                    style = button_info[2], emoji = button_info[3], row = button_info[4],
+                    func_name = button_info[5]
+                ))
+        self.check_disability()
+
+    async def update_show_article_page(self):
+
+        start_index = self.curr_page * self.parts_per_page
+        end_index = start_index + self.parts_per_page
+
+        embed = Embed(
+            colour = Colour.purple(),
+            description = '\n\n'.join(self.show_article_parts[ start_index : end_index ])
+        )
+        embed.set_author(name = 'Reading - ' + self.show_article_data['title'])
+        embed.set_thumbnail(SHOWWCASE_LOGO)
+        self.embed = embed
+
+        if self.show_id in self.roadmap_learning_data.completed_shows:
+            button = self.get_child_by(id = 'UPDATE_SHOW_STATUS')
+
+            button.label = 'MARK AS INCOMPLETE'
+            button.style = ButtonStyle.gray
+            button.emoji = '🟥'
+
+    async def page_left_button(self, interaction: MessageInteraction):
+
+        self.curr_page -=  1
+        self.check_disability()
+
+        await self.update_show_article_page()
+        await interaction.response.edit_message(embed = self.embed, view = self)
+
+    async def page_right_button(self, interaction: MessageInteraction):
+        
+        self.curr_page += 1
+        self.check_disability()
+
+        await self.update_show_article_page()
+        await interaction.response.edit_message(embed = self.embed, view = self)
+
+    @button(
+        label = 'MARK AS COMPLETE', custom_id = 'UPDATE_SHOW_STATUS',
+        style = ButtonStyle.green, emoji = '✅', row = 1
+    )
+    async def update_show_status_button(self, button: Button, interaction: MessageInteraction):
+
+        if self.show_id in self.roadmap_learning_data.completed_shows:
+
+            await self.roadmap_learning_view.mark_show_as_incomplete(self.show_id)
+            button_details = ['MARK AS COMPLETE', ButtonStyle.green, '✅']
+
+        else:
+            await self.roadmap_learning_view.mark_show_as_complete(self.show_id)
+            button_details = ['MARK AS INCOMPLETE', ButtonStyle.gray, '🟥']
+
+        button.label = button_details[0]
+        button.style = button_details[1]
+        button.emoji = button_details[2]
+
+        await self.update_show_article_page()
+        await interaction.response.edit_message(embed = self.embed, view = self)
+
+    def check_disability(self):
+
+        self.enable_all_children()
+
+        if self.curr_page == 0:
+            self.get_child_by(id = 'PAGE_LEFT').disabled = True
+
+        max_pages = floor( (len(self.show_article_parts) - 1) / self.parts_per_page )
+        if self.curr_page == max_pages:
+            self.get_child_by(id = 'PAGE_RIGHT').disabled = True
+
+    async def teardown(self):
+        self.disable_all_children()
+        await self.message.edit(embed = self.embed, view = self)
+
 class RoadmapLearningView(CustomView):
 
     def __init__(
@@ -315,7 +447,6 @@ class SeriesView(CustomView):
         embed.set_footer(text = 'Learn from Showwcase! 📘')
         embed.set_thumbnail(url = SHOWWCASE_LOGO)
 
-        print(series_cover_image)
         for show_data in series_content['projects']:
 
             show_site_url = f"https://www.showwcase.com/show/{ show_data['id'] }/{ show_data['slug'] }"

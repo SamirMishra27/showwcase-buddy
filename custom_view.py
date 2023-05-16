@@ -32,6 +32,9 @@ class CustomView(View):
         elif id is not None:
 
             for child in self.children:
+                if child.url:
+                    continue
+
                 if child.custom_id.lower() == id.lower():
                     return child
 
