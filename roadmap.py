@@ -4,6 +4,8 @@ from disnake.ext import commands
 
 from custom_view import CustomView
 from utils import SHOWWCASE_LOGO
+from roadmap_learning_data import RoadmapProgress
+from roadmap_series_data import RoadmapSeriesData
 
 from datetime import datetime
 from string import capwords
@@ -13,6 +15,7 @@ from markdownify import markdownify
 from re import sub
 from math import floor
 from typing import Union
+from asyncio import sleep as asyncio_sleep
 
 async def existing_roadmaps_autocomplete(interaction: CommandInteraction, string: str):
 
@@ -187,8 +190,8 @@ class RoadmapLearningView(CustomView):
             self.roadmap_api_data = roadmap_api_data
             self.roadmap_site_url = 'https://www.showwcase.com/roadmap/{id}/{slug}?tab=roadmap'.format(**self.roadmap_api_data)
 
-            self.roadmap_series_data = roadmap_series_data
-            self.roadmap_learning_data = roadmap_learning_data
+            self.roadmap_series_data: RoadmapSeriesData = roadmap_series_data
+            self.roadmap_learning_data: RoadmapProgress = roadmap_learning_data
 
             self.curr_page = 0
             self.last_page = -1
@@ -225,19 +228,19 @@ class RoadmapLearningView(CustomView):
 
         embed.add_field(
             name = 'You have completed',
-            value = str(self.roadmap_learning_data[5]) + ' %',
+            value = '{0} %'.format(self.roadmap_learning_data.completion_percentage),
             inline = False
         )
 
         embed.add_field(
             name = 'Topics Completed',
-            value = f"{ len(self.roadmap_learning_data[3]) } / { len(self.roadmap_series_data) }",
+            value = f'{ len(self.roadmap_learning_data.completed_series) } / { self.roadmap_series_data.series_count }',
             inline = False
         )
 
         embed.add_field(
             name = 'Articles Completed',
-            value = f"{ len(self.roadmap_learning_data[4]) } / { self.last_page + 1 }",
+            value = f'{ len(self.roadmap_learning_data.completed_shows) } / { self.roadmap_series_data.show_articles_count }',
             inline = False
         )
         self.overview_embed = embed
@@ -360,7 +363,7 @@ class RoadmapLearningView(CustomView):
             f"{ series_view_progress_bar }\n"
         )
         reading_time = show_article_data['readingStats']['text']
-        reading_status = 'Marked as completed ✅' if current_show_id in self.roadmap_learning_data[4] else ''
+        reading_status = 'Marked as completed ✅' if current_show_id in self.roadmap_learning_data.completed_shows else ''
 
         embed = Embed(
             colour = Colour.purple(),
@@ -374,7 +377,7 @@ class RoadmapLearningView(CustomView):
 
         embed.add_field(
             name = show_article_data['title'],
-            value = f'{reading_time} \n{reading_status} ⏱️',
+            value = f'{reading_time} ⏱️ \n{reading_status}',
             inline = False
         )
 
@@ -546,7 +549,26 @@ class RoadmapsView(CustomView):
             ))
 
     async def start_roadmap_for_user(self, interaction: MessageInteraction):
-        ...
+
+        roadmap_api_data = self.data[self.curr_page]
+        roadmap_id = roadmap_api_data['id']
+        roadmap_name = roadmap_api_data['title']
+
+        roadmap_learning_data = RoadmapProgress(self.bot, self.author, roadmap_id, roadmap_name)
+        await roadmap_learning_data.create_new()
+
+        await interaction.response.defer()
+        await asyncio_sleep(3)
+
+        message = (
+            f'Congratulations {self.author.name}! You have successfully enrolled in '
+            f'**{roadmap_name}!** 🎉\n'
+            f'Head over to the learning view above ^ and start learning now!\n'
+            f'I wish you good luck!'
+        )
+
+        await self.continue_roadmap_for_user(interaction)
+        await interaction.followup.send(message, ephemeral = True)
 
     async def continue_roadmap_for_user(self, interaction: MessageInteraction):
 
@@ -554,7 +576,7 @@ class RoadmapsView(CustomView):
         roadmap_id = roadmap_api_data['id']
         user_id = self.author.id
 
-        cog = interaction.bot.get_cog('Roadmap')
+        cog: Roadmap = interaction.bot.get_cog('Roadmap')
         await cog.send_learn_roadmap_view(interaction, user_id, roadmap_id, roadmap_api_data)
 
     @button(label = 'LAST', custom_id = 'PAGE_LEFT', style = ButtonStyle.blurple, disabled = True)
