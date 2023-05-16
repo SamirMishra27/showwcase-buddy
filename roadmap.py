@@ -9,6 +9,21 @@ from datetime import datetime
 from string import capwords
 from textwrap import shorten
 from json import loads
+from markdownify import markdownify
+from re import sub
+from math import floor
+from typing import Union
+
+async def existing_roadmaps_autocomplete(interaction: CommandInteraction, string: str):
+
+    bot = interaction.bot
+    query = 'SELECT roadmap_id, roadmap_name FROM roadmaps WHERE user_id = (?)'
+    
+    results = await bot.db.execute_fetchall(query, (interaction.author.id,))
+    if not results:
+        return []
+    
+    return [ OptionChoice(name = row[1], value = row[0]) for row in results ]
 
 class RedirectButton(Button):
 
@@ -241,9 +256,10 @@ class RoadmapLearningView(CustomView):
             self.category = 'LEARNING'
 
             for button_info in [
-                ['LAST', 'PAGE_LEFT', ButtonStyle.gray, 2, 'page_left_button'],
-                ['READ THIS', 'VIEW_CURR_SHOW', ButtonStyle.green, 2, 'read_curr_show_button'],
-                ['NEXT', 'PAGE_RIGHT', ButtonStyle.gray, 2, 'page_right_button']
+                ['REFRESH', 'REFRESH', ButtonStyle.gray, 0, 'refresh_view'],
+                ['LAST', 'PAGE_LEFT', ButtonStyle.gray, 1, 'page_left_button'],
+                ['READ THIS', 'VIEW_CURR_SHOW', ButtonStyle.green, 1, 'read_curr_show_button'],
+                ['NEXT', 'PAGE_RIGHT', ButtonStyle.gray, 1, 'page_right_button']
             ]:
                 self.add_item(RedirectButton(
                     label = button_info[0], custom_id = button_info[1],
@@ -264,9 +280,14 @@ class RoadmapLearningView(CustomView):
             button.style = ButtonStyle.green
             self.embed = self.overview_embed
 
-            for child_id in ('PAGE_LEFT', 'VIEW_CURR_SHOW', 'PAGE_RIGHT'):
+            for child_id in ('REFRESH', 'PAGE_LEFT', 'VIEW_CURR_SHOW', 'PAGE_RIGHT'):
                 self.remove_item(self.get_child_by(id = child_id))
 
+        await interaction.response.edit_message(embed = self.embed, view = self)
+
+    async def refresh_view(self, interaction: MessageInteraction):
+
+        await self.update_learning_embed()
         await interaction.response.edit_message(embed = self.embed, view = self)
 
     async def page_left_button(self, interaction: MessageInteraction):
@@ -533,25 +554,8 @@ class RoadmapsView(CustomView):
         roadmap_id = roadmap_api_data['id']
         user_id = self.author.id
 
-        api_response = await self.bot.session.get(f'https://cache.showwcase.com/roadmaps/{roadmap_id}/series')
-        roadmap_series_data = await api_response.json()
-
-        query = 'SELECT * FROM roadmaps WHERE user_id = (?) AND roadmap_id = (?)'
-        sql_data = await self.bot.db.execute_fetchall(query, (user_id, roadmap_id))
-
-        sql_data = sql_data[0]
-        roadmap_learning_data = [
-            sql_data[0], sql_data[1], sql_data[2], loads(sql_data[3]),
-            loads(sql_data[4]), sql_data[5], sql_data[6]
-        ]
-        # Convert is_finished as well
-
-        view = RoadmapLearningView(
-            self.author, self.bot, roadmap_api_data,
-            roadmap_series_data, roadmap_learning_data
-        )
-        resp_message = await interaction.response.send_message(embed = view.embed, view = view, ephemeral = True)
-        await view.resolve_message(interaction, resp_message)
+        cog = interaction.bot.get_cog('Roadmap')
+        await cog.send_learn_roadmap_view(interaction, user_id, roadmap_id, roadmap_api_data)
 
     @button(label = 'LAST', custom_id = 'PAGE_LEFT', style = ButtonStyle.blurple, disabled = True)
     async def page_left_button(self, button: Button, interaction: MessageInteraction):
@@ -721,6 +725,44 @@ class Roadmap(commands.Cog):
 
         resp_message = await ctx.send(embed = view.embed, view = view, ephemeral = False)
         await view.resolve_message(ctx, resp_message)
+
+    @commands.slash_command(name = 'roadmapslearn')
+    async def learn_roadmap(
+        self,
+        interaction: CommandInteraction,
+        roadmap_id: int = commands.Param(
+            name = 'roadmap-name',
+            autocomplete = existing_roadmaps_autocomplete
+        )
+    ):        
+        await self.send_learn_roadmap_view(interaction, interaction.author.id, roadmap_id, None)
+
+    async def send_learn_roadmap_view(
+        self,
+        interaction: Union[CommandInteraction, MessageInteraction],
+        user_id,
+        roadmap_id,
+        roadmap_api_data = None
+    ):
+        if not roadmap_api_data:
+            api_response = await self.bot.session.get(f'https://cache.showwcase.com/roadmaps/{roadmap_id}')
+            roadmap_api_data = await api_response.json()
+
+        api_response = await self.bot.session.get(f'https://cache.showwcase.com/roadmaps/{roadmap_id}/series')
+        roadmap_series_data = RoadmapSeriesData(self.bot, await api_response.json())
+
+        query = 'SELECT * FROM roadmaps WHERE user_id = (?) AND roadmap_id = (?)'
+        sql_data = await self.bot.db.execute_fetchall(query, (user_id, roadmap_id))
+
+        sql_data = sql_data[0]
+        roadmap_learning_data: RoadmapProgress = await RoadmapProgress.cache_existing_data(self.bot, interaction.author, sql_data)
+
+        view = RoadmapLearningView(
+            interaction.author, self.bot, roadmap_api_data,
+            roadmap_series_data, roadmap_learning_data, timeout = 600
+        )
+        resp_message = await interaction.response.send_message(embed = view.embed, view = view, ephemeral = True)
+        await view.resolve_message(interaction, resp_message)
 
 def setup(bot: commands.bot):
     bot.add_cog(Roadmap(bot))
