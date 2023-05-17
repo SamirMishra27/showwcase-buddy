@@ -199,10 +199,15 @@ class RoadmapLearningView(CustomView):
 
             self.message: Message = None
             self.embed: Embed = None
-            self.add_item(Button(label = 'VIEW ON SHOWWCASE', url = self.roadmap_site_url))
 
+            self.add_item(Button(label = 'VIEW ON SHOWWCASE', url = self.roadmap_site_url))
             self.overview_embed: Embed = None
+
+            self.next_unread_show_id: int = self.roadmap_series_data[0][1]['id']
+            self.next_unread_page: int = 0
+
             self.make_overview_embed()
+            self.find_next_unread_show()
 
     async def interaction_check(self, interaction: MessageInteraction) -> bool:
         if interaction.user.id == self.author.id and interaction.message.id == self.message.id:
@@ -242,6 +247,16 @@ class RoadmapLearningView(CustomView):
         )
         self.overview_embed = embed
         self.embed = embed
+
+    def find_next_unread_show(self):
+
+        for i in range(0, self.last_page + 1):
+            _, curr_show = self.roadmap_series_data[i]
+
+            if curr_show['id'] not in self.roadmap_learning_data.completed_shows:
+                self.next_unread_show_id = curr_show['id']
+                self.next_unread_page = i
+                break
 
     def update_completion_percentage(self) -> None:
 
@@ -284,11 +299,16 @@ class RoadmapLearningView(CustomView):
         if self.category == 'OVERVIEW':
             self.category = 'LEARNING'
 
+            next_unread_show = self.roadmap_series_data.find_show_article_by_id(self.next_unread_show_id)
+            show_name = shorten(next_unread_show['title'], width = 30, placeholder = '...')
+
             for button_info in [
-                ['REFRESH', 'REFRESH', ButtonStyle.gray, 0, 'refresh_view'],
+                ['REFRESH', 'REFRESH', ButtonStyle.blurple, 0, 'refresh_view'],
                 ['LAST', 'PAGE_LEFT', ButtonStyle.gray, 1, 'page_left_button'],
                 ['READ THIS', 'VIEW_CURR_SHOW', ButtonStyle.green, 1, 'read_curr_show_button'],
-                ['NEXT', 'PAGE_RIGHT', ButtonStyle.gray, 1, 'page_right_button']
+                ['NEXT', 'PAGE_RIGHT', ButtonStyle.gray, 1, 'page_right_button'],
+                ['NEXT - ' + show_name, 'JUMP_TO_UNREAD', ButtonStyle.green, 2, 'read_next_unread_show_button'],
+                ['JUMP TO PAGE', 'JUMP_TO_PAGE', ButtonStyle.gray, 2, 'navigate_to_page_prompt_button']
             ]:
                 self.add_item(RedirectButton(
                     label = button_info[0], custom_id = button_info[1],
@@ -334,6 +354,32 @@ class RoadmapLearningView(CustomView):
 
         await self.update_learning_embed()
         await interaction.response.edit_message(embed = self.embed, view = self)
+
+    async def read_next_unread_show_button(self, interaction: MessageInteraction):
+
+        self.curr_page = self.next_unread_page
+        self.check_disability()
+
+        await self.update_learning_embed()
+        await interaction.response.edit_message(embed = self.embed, view = self)
+
+    async def navigate_to_page_prompt_button(self, interaction: MessageInteraction):
+
+        await interaction.response.send_message(f'Which page would you like to jump to? ({1}/{self.last_page + 1})')
+        check = lambda x: x.author.id == self.author.id and x.content.isnumeric() and int(x.content) in range(1, self.last_page + 2)
+        try:
+            message: Message = await self.bot.wait_for('message', timeout = 60, check = check)
+            self.curr_page = int(message.content) - 1
+
+            self.check_disability()
+            await self.update_learning_embed()
+            await self.message.edit(embed = self.embed, view = self)
+
+            await message.delete()
+            await interaction.delete_original_message()
+
+        except Exception as e:
+            await interaction.delete_original_message()
 
     async def read_curr_show_button(self, interaction: MessageInteraction):
 
@@ -391,6 +437,8 @@ class RoadmapLearningView(CustomView):
         self.embed = embed
 
         self.get_child_by(id = 'VIEW_CURR_SHOW').label = shorten(show_article_data['title'], width = 30, placeholder = '...')
+        if self.curr_page == self.next_unread_page:
+            self.get_child_by(id = 'JUMP_TO_UNREAD').disabled = True
 
     def check_disability(self):
 
