@@ -125,8 +125,8 @@ class RoadmapProgress:
     async def update_is_finished(self):
 
         await self.bot.db.execute(
-            'UPDATE roadmaps SET is_finished WHERE user_id == (?) AND roadmap_id (?);',
-            (self.is_finished,)
+            'UPDATE roadmaps SET is_finished = (?) WHERE user_id == (?) AND roadmap_id == (?);',
+            ('TRUE' if self.is_finished else 'FALSE', self.user_id, self.roadmap_id)
         )
         await self.bot.db.commit()
 
