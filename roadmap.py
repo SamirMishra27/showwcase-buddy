@@ -179,13 +179,14 @@ class ShowArticleView(CustomView):
 class RoadmapLearningView(CustomView):
 
     def __init__(
-            self, author, bot, roadmap_api_data,
+            self, author, channel, bot, roadmap_api_data,
             roadmap_series_data, roadmap_learning_data, *, timeout = 180
         ):
             super().__init__(clear_on_timeout = False, timeout = timeout)
 
             self.author = author
             self.bot = bot
+            self.channel = channel
 
             self.roadmap_api_data = roadmap_api_data
             self.roadmap_site_url = 'https://www.showwcase.com/roadmap/{id}/{slug}?tab=roadmap'.format(**self.roadmap_api_data)
@@ -258,12 +259,46 @@ class RoadmapLearningView(CustomView):
                 self.next_unread_page = i
                 break
 
-    def update_completion_percentage(self) -> None:
+    async def send_roadmap_finished_message(self):
+
+        roadmap_name = self.roadmap_learning_data.roadmap_name
+        message = (
+            f'**{self.author.name}!** You have finished the **{roadmap_name}** Roadmap!\n'
+            f'Congratulations! 🙌🎉🍻 You have learnt a new skill.\n\n'
+            f'**What\'s next?**\n'
+            f'Go to the Roadmap on Showwcase site and claim your certificate!\n'
+            f'To claim your certificate, mark all the shows on the *The Roadmap* section '
+            f'as completed and then click on *Claim Certificate Of Completion* and claim your credentials!\n\n'
+            f'**DEVELOPER TIP!💡**\n'
+            f'Share your achievement on the social media! Go out on your [Twitter](https://twitter.com/home), '
+            f'[Linkedin](https://www.linkedin.com/) and even on your own [Showwcase](https://www.showwcase.com/) profile!\n'
+            f'Tell the world that you\'re learning and you have made the progress!\n\n'
+            f'**It\'s not over yet!**\n'
+            f'Start making projects or deep dive into more complex topics about this skill! '
+            f'Head over to https://www.showwcase.com/explore and explore Shows and Threads '
+            f'related to this skill!'
+        )
+
+        embed = embed = Embed(colour = Colour.blurple(), description = message)
+        try:
+            await self.channel.send(embed = embed)
+        except Exception as e:
+            try:
+                await self.author.send(embed = embed)
+            except Exception as e: pass
+
+    async def update_completion_percentage(self) -> None:
 
         shows_completed = len(self.roadmap_learning_data.completed_shows)
         total_shows = self.roadmap_series_data.show_articles_count
-            
-        self.roadmap_learning_data.completion_percentage = round((shows_completed / total_shows) * 100, 2)
+
+        percent = round((shows_completed / total_shows) * 100, 2)
+        self.roadmap_learning_data.completion_percentage = percent
+
+        if percent == 100 and not self.roadmap_learning_data.is_finished:
+            self.roadmap_learning_data.is_finished = True
+            await self.roadmap_learning_data.update_is_finished()
+            await self.send_roadmap_finished_message()
 
     async def mark_show_as_complete(self, show_id):
         
@@ -276,7 +311,7 @@ class RoadmapLearningView(CustomView):
         ]):
             self.roadmap_learning_data.add_series(current_series['id'])
 
-        self.update_completion_percentage()
+        await self.update_completion_percentage()
         await self.roadmap_learning_data.save_progress()
 
     async def mark_show_as_incomplete(self, show_id):
@@ -284,13 +319,13 @@ class RoadmapLearningView(CustomView):
         self.roadmap_learning_data.remove_show(show_id)
         current_series = self.roadmap_series_data.find_series_by_show_id(show_id)
 
-        if all([
-            show['id'] not in self.roadmap_learning_data.completed_series \
+        if not all([
+            show['id'] not in self.roadmap_learning_data.completed_shows \
             for show in current_series['projects']
         ]):
             self.roadmap_learning_data.remove_series(current_series['id'])
 
-        self.update_completion_percentage()
+        await self.update_completion_percentage()
         await self.roadmap_learning_data.save_progress()
 
     @button(label = 'VIEW LEARNING', custom_id = 'TOGGLE_VIEW', style = ButtonStyle.green)
@@ -324,12 +359,16 @@ class RoadmapLearningView(CustomView):
 
         else: # self.category == 'LEARNING'
             self.category = 'OVERVIEW'
+            self.make_overview_embed()
 
             button.label = 'VIEW LEARNING'
             button.style = ButtonStyle.green
             self.embed = self.overview_embed
 
-            for child_id in ('REFRESH', 'PAGE_LEFT', 'VIEW_CURR_SHOW', 'PAGE_RIGHT'):
+            for child_id in (
+                'REFRESH', 'PAGE_LEFT', 'VIEW_CURR_SHOW',
+                'PAGE_RIGHT', 'JUMP_TO_UNREAD', 'JUMP_TO_PAGE'
+            ):
                 self.remove_item(self.get_child_by(id = child_id))
 
         await interaction.response.edit_message(embed = self.embed, view = self)
@@ -433,7 +472,7 @@ class RoadmapLearningView(CustomView):
             inline = False
         )
 
-        embed.set_image(url = show_article_data['coverImage'])
+        embed.set_image(url = show_article_data['coverImageUrl'])
         self.embed = embed
 
         self.get_child_by(id = 'VIEW_CURR_SHOW').label = shorten(show_article_data['title'], width = 30, placeholder = '...')
@@ -834,7 +873,7 @@ class Roadmap(commands.Cog):
         roadmap_learning_data: RoadmapProgress = await RoadmapProgress.cache_existing_data(self.bot, interaction.author, sql_data)
 
         view = RoadmapLearningView(
-            interaction.author, self.bot, roadmap_api_data,
+            interaction.author, interaction.channel, self.bot, roadmap_api_data,
             roadmap_series_data, roadmap_learning_data, timeout = 600
         )
         resp_message = await interaction.send(embed = view.embed, view = view, ephemeral = True)
