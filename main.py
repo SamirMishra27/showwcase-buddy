@@ -2,7 +2,6 @@ import disnake
 from disnake.ext import commands
 
 from aiohttp import ClientSession
-from asyncio import sleep
 from datetime import datetime
 from os import environ
 
@@ -54,7 +53,7 @@ class ShowwcaseBuddyClient(commands.Bot):
 
         self.version = '1.0'
         self.debug_channel = 995124307917279252
-        self.bot_extensions = ['jishaku', 'hackathon', 'roadmap']
+        self.bot_extensions = ['jishaku', 'hackathon', 'roadmap', 'jobs', 'cogs.helpcommand']
 
         self.launched_at = None
         self.session = ClientSession()
@@ -63,6 +62,7 @@ class ShowwcaseBuddyClient(commands.Bot):
         self._disconnected = False
 
         # self.activity = disnake.CustomActivity(name = 'Helping Showwcase Developers!')
+        self.activity = disnake.Activity(type = disnake.ActivityType.custom, name = 'Helping Showwcase Developers!')
         self.loop.create_task(self.on_bot_start())
 
         ext_count = 0
@@ -81,7 +81,7 @@ class ShowwcaseBuddyClient(commands.Bot):
     async def on_bot_start(self):
         
         self.db = await aiosqlite.connect('showwcase_data.db')
-        print("Successfully established connection with database")
+        print('Successfully established connection with database\n')
 
     async def on_ready(self):
         print(
@@ -134,9 +134,6 @@ class ShowwcaseBuddyClient(commands.Bot):
     
     async def on_resumed(self):
         self._disconnected = False
-
-    # async def get_context(self, message):
-    #     return await super().get_context(message, cls=CustomContext)
 
     async def close(self):
 
