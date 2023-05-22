@@ -2,18 +2,15 @@ from disnake import CommandInteraction, MessageInteraction, ButtonStyle, Embed, 
 from disnake.ui import button, Button
 from disnake.ext import commands
 
+from show_article_view import ShowArticleView
 from custom_view import CustomView
-from utils import SHOWWCASE_LOGO
+from utils import SHOWWCASE_LOGO, RedirectButton
 from roadmap_learning_data import RoadmapProgress
 from roadmap_series_data import RoadmapSeriesData
 
 from datetime import datetime
 from string import capwords
 from textwrap import shorten
-from json import loads
-from markdownify import markdownify
-from re import sub
-from math import floor
 from typing import Union
 from asyncio import sleep as asyncio_sleep
 
@@ -27,94 +24,26 @@ async def existing_roadmaps_autocomplete(interaction: CommandInteraction, string
         return []
     
     return [ OptionChoice(name = row[1], value = row[0]) for row in results ]
-
-class RedirectButton(Button):
-
-    def __init__(self, style, label, custom_id, emoji, row, func_name):
-        super().__init__(
-            style = style,
-            label = label,
-            disabled = False,
-            custom_id = custom_id,
-            emoji = emoji,
-            row = row
-        )
-        self.func_name = func_name
-
-    async def callback(self, interaction: MessageInteraction):
-        return await getattr(self.view, self.func_name)(interaction)
-
-class ShowArticleView(CustomView):
+    
+class RoadmapShowArticleView(ShowArticleView):
 
     def __init__(
-            self, author, bot,
-            show_id,
-            show_article_data,
-            roadmap_learning_data,
-            roadmap_learning_view,
-            *, timeout = 180
-        ):
-            super().__init__(clear_on_timeout = False, timeout = timeout)
+        self,
+        author,
+        bot,
+        show_id,
+        show_article_data,
+        roadmap_learning_data,
+        roadmap_learning_view,
+        *, timeout = 180
+    ):
+        super().__init__(author, bot, show_id, show_article_data, timeout = timeout)
 
-            self.author = author
-            self.bot = bot
-
-            self.show_id = show_id
-            self.show_article_data = show_article_data
-            self.show_site_url = "https://www.showwcase.com/show/{id}/{slug}".format(**show_article_data)
-
-            self.roadmap_learning_data: RoadmapProgress = roadmap_learning_data
-            self.roadmap_learning_view: RoadmapLearningView = roadmap_learning_view
-
-            self.curr_page = 0
-            self.show_article_parts = []
-            self.parts_per_page = 5
-
-            self.message: Message = None
-            self.embed: Embed = None
-
-            self.add_item(Button(label = 'READ ON SHOWWCASE', url = self.show_site_url, row = 1))
-            self.make_show_article()
-
-    async def interaction_check(self, interaction) -> bool:
-        if interaction.user.id == self.author.id and interaction.message.id == self.message.id:
-            return True
-        else:
-            await interaction.response.send_message('This is not for you!', ephemeral = True)
-
-    def make_show_article(self):
-
-        show_article_content = self.show_article_data['content'][0]['lexicalBlock']['html']
-        show_article_markdown = markdownify(show_article_content, heading_style = 'ATX_CLOSED')
-
-        show_article_markdown = sub('[#]{1,6}', '**', show_article_markdown)
-        self.show_article_parts = show_article_markdown.split('\n\n')
-
-        if len(self.show_article_parts) > 5:
-
-            for button_info in [
-                ['LAST', 'PAGE_LEFT', ButtonStyle.blurple, '◀️', 0, 'page_left_button'],
-                ['NEXT', 'PAGE_RIGHT', ButtonStyle.blurple, '▶️', 0, 'page_right_button']
-            ]:
-                self.add_item(RedirectButton(
-                    label = button_info[0], custom_id = button_info[1],
-                    style = button_info[2], emoji = button_info[3], row = button_info[4],
-                    func_name = button_info[5]
-                ))
-        self.check_disability()
+        self.roadmap_learning_data: RoadmapProgress = roadmap_learning_data
+        self.roadmap_learning_view: RoadmapLearningView = roadmap_learning_view
 
     async def update_show_article_page(self):
-
-        start_index = self.curr_page * self.parts_per_page
-        end_index = start_index + self.parts_per_page
-
-        embed = Embed(
-            colour = Colour.purple(),
-            description = '\n\n'.join(self.show_article_parts[ start_index : end_index ])
-        )
-        embed.set_author(name = 'Reading - ' + self.show_article_data['title'])
-        embed.set_thumbnail(SHOWWCASE_LOGO)
-        self.embed = embed
+        super().update_show_article_page()
 
         if self.show_id in self.roadmap_learning_data.completed_shows:
             button = self.get_child_by(id = 'UPDATE_SHOW_STATUS')
@@ -122,22 +51,6 @@ class ShowArticleView(CustomView):
             button.label = 'MARK AS INCOMPLETE'
             button.style = ButtonStyle.gray
             button.emoji = '🟥'
-
-    async def page_left_button(self, interaction: MessageInteraction):
-
-        self.curr_page -=  1
-        self.check_disability()
-
-        await self.update_show_article_page()
-        await interaction.response.edit_message(embed = self.embed, view = self)
-
-    async def page_right_button(self, interaction: MessageInteraction):
-        
-        self.curr_page += 1
-        self.check_disability()
-
-        await self.update_show_article_page()
-        await interaction.response.edit_message(embed = self.embed, view = self)
 
     @button(
         label = 'MARK AS COMPLETE', custom_id = 'UPDATE_SHOW_STATUS',
@@ -160,21 +73,6 @@ class ShowArticleView(CustomView):
 
         await self.update_show_article_page()
         await interaction.response.edit_message(embed = self.embed, view = self)
-
-    def check_disability(self):
-
-        self.enable_all_children()
-
-        if self.curr_page == 0:
-            self.get_child_by(id = 'PAGE_LEFT').disabled = True
-
-        max_pages = floor( (len(self.show_article_parts) - 1) / self.parts_per_page )
-        if self.curr_page == max_pages:
-            self.get_child_by(id = 'PAGE_RIGHT').disabled = True
-
-    async def teardown(self):
-        self.disable_all_children()
-        await self.message.edit(embed = self.embed, view = self)
 
 class RoadmapLearningView(CustomView):
 
