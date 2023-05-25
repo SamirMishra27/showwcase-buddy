@@ -7,6 +7,83 @@ from custom_view import CustomView
 from utils import SHOWWCASE_LOGO
 from datetime import datetime
 from typing import List
+from math import ceil
+
+class UserShowsHistory(CustomView):
+
+    def __init__(self, author, bot, users_show_history):
+
+        self.author = author
+        self.bot = bot
+
+        self.users_show_history: list[dict] = users_show_history
+        self.curr_page = 0
+        self.history_per_page = 10
+
+        self.message: Message = None
+        self.embed: Embed = None
+
+    @button(label = 'LAST', custom_id = 'PAGE_LEFT', style = ButtonStyle.blurple, disabled = True)
+    async def page_left_button(self, button: Button, interaction: MessageInteraction):
+
+        self.curr_page -= 1
+        self.check_disability()
+
+        await self.update_embed_page()
+        await interaction.response.edit_message(embed = self.embed, view = self)
+
+    @button(custom_id = 'PAGE_NO', style = ButtonStyle.gray, disabled = True)
+    async def page_no_button(self, button, interaction):
+        pass
+
+    @button(label = 'NEXT', custom_id = 'PAGE_RIGHT', style = ButtonStyle.blurple)
+    async def page_right_button(self, button: Button, interaction: MessageInteraction):
+
+        self.curr_page += 1
+        self.check_disability()
+
+        await self.update_embed_page()
+        await interaction.response.edit_message(embed = self.embed, view = self)
+
+    async def update_embed_page(self):
+
+        embed = Embed(
+            title = f"{self.author.name}'s Showwcase reading history",
+            colour = Colour.dark_green(),
+            description = ''
+        )
+        list_of_shows = []
+
+        if len(self.users_show_history) < 10:
+            list_of_shows = self.users_show_history
+
+        else:
+            start_index = self.curr_page * self.history_per_page
+            end_index = start_index + self.history_per_page
+            list_of_shows = self.users_show_history[start_index : end_index]
+
+        for show_info in list_of_shows:
+            embed.description += (
+                '- {post_title} \n'.format(**show_info) +
+                '> Read on: <t:{0}:F> (<t:{0}:F>)\n'.format(int( show_info['readed_at_timestamp'] )) +
+                '> {reading_time} min read\n\n'.format(**show_info)
+            )
+
+        self.get_child_by(id = 'PAGE_NO').label = f'{self.curr_page + 1} / {len(self.users_show_history)}'
+        self.embed = embed
+
+    def check_disability(self):
+        self.enable_all_children()
+
+        if self.curr_page == 0:
+            self.get_child_by(id = 'PAGE_LEFT').disabled = True
+
+        if self.curr_page == len(self.users_show_history) - 1:
+            self.get_child_by(id = 'PAGE_RIGHT').disabled = True
+
+    async def teardown(self):
+        self.disable_all_children()
+        await self.message.edit(embed = self.embed, view = self)
 
 async def jsonize_sql_data(sql_data: List[tuple], specifications: List[list]) -> List[dict]:
 
