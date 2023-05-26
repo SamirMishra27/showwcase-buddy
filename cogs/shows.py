@@ -215,17 +215,32 @@ class ShowsListView(CustomView):
         await interaction.response.edit_message(embed = self.embed, view = self)
 
     @button(label = 'READ NOW', custom_id = 'READ_SHOW_ARTICLE', style = ButtonStyle.green, emoji = '📖', row = 2)
-    async def read_curr_show_button(self, interaction: MessageInteraction):
+    async def read_curr_show_button(self, button: Button, interaction: MessageInteraction):
 
-        view = StandaloneShowArticleView(
-            self.author, self.bot,
-            self.current_show_id,
-            self.current_show_data
-        )
-        await view.update_show_article_page()
+        api_response = await self.bot.session.get(f'https://cache.showwcase.com/projects/{self.current_show_id}')
+        show_api_data = await api_response.json()
 
-        resp_message = await interaction.response.send_message(embed = view.embed, view = self, ephemeral = True)
-        await view.resolve_message(interaction, resp_message)
+        try:
+            view = StandaloneShowArticleView(
+                self.author, self.bot,
+                self.current_show_id,
+                show_api_data
+            )
+            await view.check_post_status_initial()
+            await view.update_show_article_page()
+
+            resp_message = await interaction.response.send_message(embed = view.embed, view = view, ephemeral = True)
+            await view.resolve_message(interaction, resp_message)
+
+        except Exception as e:
+            print_exception(e, e, e.__traceback__)
+
+            show_url = "https://www.showwcase.com/show/{id}/{slug}".format(**show_api_data)
+            await interaction.response.send_message(
+                f'Failed to load the article! \n'
+                f'Here is the link to the show => {show_url}',
+                ephemeral = True
+            )
 
     async def update_embed_page(self):
 
