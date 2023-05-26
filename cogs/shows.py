@@ -8,6 +8,8 @@ from utils import SHOWWCASE_LOGO
 from datetime import datetime
 from typing import List
 from math import ceil
+from urllib.parse import quote
+from traceback import print_exception
 
 class UserShowsHistory(CustomView):
 
@@ -87,7 +89,7 @@ class UserShowsHistory(CustomView):
 
 async def jsonize_sql_data(sql_data: List[tuple], specifications: List[list]) -> List[dict]:
 
-    if len(sql_data[0]) != specifications:
+    if len(sql_data[0]) != len(specifications):
         raise ValueError('Specifications should have same number of key names as the length of data tuple')
 
     json_data: list[dict] = []
@@ -96,24 +98,74 @@ async def jsonize_sql_data(sql_data: List[tuple], specifications: List[list]) ->
 
         for index, key_name in specifications:
             row_object[key_name] = row[index]
+        json_data.append(row_object)
 
     return json_data
 
 class StandaloneShowArticleView(ShowArticleView):
 
     def __init__(self, author, bot, show_id, show_article_data, *, timeout = 180):
-        super().__init__(author, bot, show_id, show_article_data)
+        super().__init__(author, bot, show_id, show_article_data, timeout = timeout)
+
+    async def check_post_status_initial(self):
+
+        query = 'SELECT * FROM post_history WHERE user_id == (?) AND post_id == (?)'
+        sql_data = await self.bot.db.execute_fetchall(query, (self.author.id, self.show_id))
+
+        if sql_data:
+            button = self.get_child_by(id = 'UPDATE_SHOW_STATUS')
+
+            button.label = 'MARK AS UNREAD'
+            button.style = ButtonStyle.gray
+            button.emoji = '🟥'
 
     @button(
-        label = 'MARK_AS_READ', custom_id = 'UPDATE_SHOW_STATUS',
+        label = 'MARK AS READ', custom_id = 'UPDATE_SHOW_STATUS',
         style = ButtonStyle.green, emoji = '✅', row = 1
     )
     async def update_show_status_button(self, button: Button, interaction: MessageInteraction):
 
-        # If show id and user id was found in database
-        # Then mark this show as incomplete
-        # If not found in database
-        # Then mark this show as complete and make an entry in the database with show id, user id, time of reading and other data
+        button = self.get_child_by(id = 'UPDATE_SHOW_STATUS')
+        query = 'SELECT * FROM post_history WHERE user_id == (?) AND post_id == (?)'
+        sql_data = await self.bot.db.execute_fetchall(query, (self.author.id, self.show_id))
+
+        if not sql_data:
+            query = '''
+                INSERT INTO post_history(user_id, post_id, post_title,
+                post_slug, readed_at, readed_at_timestamp,
+                reading_time) VALUES (?,?,?,?,?,?,?)
+            '''
+            readed_at_datetime = datetime.now()
+            if 'readingStats' in self.show_article_data.keys():
+                reading_time = ceil(self.show_article_data['readingStats']['time'] / 1000 / 60)
+            else:
+                reading_time = 2
+
+            to_enter = (
+                self.author.id,
+                self.show_id,
+                self.show_article_data['title'],
+                self.show_article_data['slug'],
+                str(readed_at_datetime),
+                readed_at_datetime.timestamp(),
+                reading_time
+            )
+            await self.bot.db.execute(query, to_enter)
+            await self.bot.db.commit()
+
+            button.label = 'MARK AS UNREAD'
+            button.style = ButtonStyle.gray
+            button.emoji = '🟥'
+
+        elif sql_data:
+            query = 'DELETE FROM post_history WHERE user_id == (?) AND post_id == (?)'
+            await self.bot.db.execute(query, (self.author.id, self.show_id))
+            await self.bot.db.commit()
+
+            button.label = 'MARK AS READ'
+            button.style = ButtonStyle.green
+            button.emoji = '✅'
+
         await self.update_show_article_page()
         await interaction.response.edit_message(embed = self.embed, view = self)
 
