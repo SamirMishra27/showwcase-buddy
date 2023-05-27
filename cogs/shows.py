@@ -14,13 +14,16 @@ from traceback import print_exception
 class UserShowsHistory(CustomView):
 
     def __init__(self, author, bot, users_show_history):
+        super().__init__(clear_on_timeout = False, timeout = 120)
 
         self.author = author
         self.bot = bot
 
         self.users_show_history: list[dict] = users_show_history
         self.curr_page = 0
+
         self.history_per_page = 10
+        self.max_page = int(len(self.users_show_history) / self.history_per_page)
 
         self.message: Message = None
         self.embed: Embed = None
@@ -76,11 +79,12 @@ class UserShowsHistory(CustomView):
 
     def check_disability(self):
         self.enable_all_children()
+        self.get_child_by(id = 'PAGE_NO').disabled = True
 
         if self.curr_page == 0:
             self.get_child_by(id = 'PAGE_LEFT').disabled = True
 
-        if self.curr_page == len(self.users_show_history) - 1:
+        if self.curr_page == self.max_page:
             self.get_child_by(id = 'PAGE_RIGHT').disabled = True
 
     async def teardown(self):
@@ -184,7 +188,6 @@ class ShowsListView(CustomView):
         self.embed: Embed = None
 
         self.current_show_id: int = None
-        self.current_show_data: dict = None
 
     async def interaction_check(self, interaction: MessageInteraction) -> bool:
         if interaction.user.id == self.author.id and interaction.message.id == self.message.id:
@@ -364,3 +367,6 @@ class Shows(commands.Cog):
 
         resp_message = await ctx.response.send_message(embed = view.embed, view = view)
         await view.resolve_message(ctx, resp_message)
+
+def setup(bot: commands.Bot):
+    bot.add_cog(Shows(bot))
