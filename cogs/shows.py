@@ -68,13 +68,18 @@ class UserShowsHistory(CustomView):
             list_of_shows = self.users_show_history[start_index : end_index]
 
         for show_info in list_of_shows:
+
+            timestamp = int( show_info['readed_at_timestamp'] )
+            show_url = 'https://www.showwcase.com/show/{post_id}/{post_slug}'.format(**show_info)
+            reading_time = show_info['reading_time']
+
             embed.description += (
-                '- {post_title} \n'.format(**show_info) +
-                '> Read on: <t:{0}:F> (<t:{0}:F>)\n'.format(int( show_info['readed_at_timestamp'] )) +
-                '> {reading_time} min read\n\n'.format(**show_info)
+                '- **[{}]({})**\n'.format(show_info['post_title'], show_url) +
+                '> Read on: <t:{0}:F> (<t:{0}:R>)\n'.format(timestamp) +
+                '> {} min read | ID: {}\n\n'.format(reading_time, show_info['post_id'])
             )
 
-        self.get_child_by(id = 'PAGE_NO').label = f'{self.curr_page + 1} / {len(self.users_show_history)}'
+        self.get_child_by(id = 'PAGE_NO').label = f'{self.curr_page + 1} / {self.max_page + 1}'
         self.embed = embed
 
     def check_disability(self):
@@ -248,41 +253,49 @@ class ShowsListView(CustomView):
     async def update_embed_page(self):
 
         time_parse_format = '%Y-%m-%dT%H:%M:%S.%fZ'
-        page_content = self.jobs_list[self.curr_page]
+        page_content = self.shows_list[self.curr_page]
 
         self.current_show_data = page_content
         self.current_show_id = page_content['id']
 
-        reading_time = page_content['readingStats']['text']
+        if 'readingStats' in page_content.keys():
+            reading_time_or_views = '{} ⏱️'.format(page_content['readingStats']['text'])
+        else:
+            reading_time_or_views = '{} Views'.format(page_content['views'])
         show_published_date = datetime.strptime(page_content['publishedDate'], time_parse_format)
 
         embed = Embed(colour = Colour.orange())
         embed.set_author(
             name = 'Showwcase Shows',
             url = 'https://www.showwcase.com/',
-            icon_url = self.bot.user.display_avatar_url
+            icon_url = self.bot.user.display_avatar.url
         )
         embed.set_thumbnail(url = SHOWWCASE_LOGO)
 
         embed.add_field(
             name = page_content['title'],
-            value = f'{reading_time} ⏱️',
+            value = reading_time_or_views,
             inline = False
         )
         embed.add_field(
             name = 'Published on 📺',
-            value = f'<t:{ show_published_date.timestamp() }:F>',
+            value = f'<t:{int( show_published_date.timestamp() )}:F>',
             inline = False
         )
-
+        embed.add_field(
+            name = 'Written By ⌨️',
+            value = page_content['user']['displayName'],
+            inline = False
+        )
         embed.set_image(url = page_content['coverImageUrl'])
+
+        self.get_child_by(id = 'PAGE_NO').label = f'{self.curr_page + 1} / {len(self.shows_list)}'
         self.embed = embed
 
     def check_disability(self):
 
         self.enable_all_children()
-        if self.category == 'OVERVIEW':
-            return
+        self.get_child_by(id = 'PAGE_NO').disabled = True
 
         if self.curr_page == 0:
             self.get_child_by(id = 'PAGE_LEFT').disabled = True
