@@ -28,6 +28,12 @@ class UserShowsHistory(CustomView):
         self.message: Message = None
         self.embed: Embed = None
 
+    async def interaction_check(self, interaction: MessageInteraction) -> bool:
+        if interaction.user.id == self.author.id and interaction.message.id == self.message.id:
+            return True
+        else:
+            await interaction.response.send_message('This is not for you!', ephemeral = True)
+
     @button(label = 'LAST', custom_id = 'PAGE_LEFT', style = ButtonStyle.blurple, disabled = True)
     async def page_left_button(self, button: Button, interaction: MessageInteraction):
 
@@ -366,16 +372,18 @@ class Shows(commands.Cog):
     @shows_group_command.sub_command(name = 'myhistory')
     async def show_article_history(self, ctx: CommandInteraction):
 
-        query = '''
-            SELECT JSON_OBJECT() FROM --TableName-- WHERE user_id == (?) ORDER BY timestamp DESC
-        '''
+        query = 'SELECT * FROM post_history WHERE user_id == (?) ORDER BY readed_at_timestamp DESC'
         sql_data = await self.bot.db.execute_fetchall(query, (ctx.author.id,))
-        
+
         if not sql_data:
             return await ctx.send('You have not read any Showwcase articles yet!')
-        user_show_history = await jsonize_sql_data(sql_data, {})
+        user_show_history = await jsonize_sql_data(sql_data, [
+            [0, 'user_id'], [1, 'post_id'], [2, 'post_title'], [3, 'post_slug'],
+            [4, 'readed_at'], [5, 'readed_at_timestamp'], [6, 'reading_time']
+        ])
 
         view = UserShowsHistory(ctx.author, self.bot, user_show_history)
+        view.check_disability()
         await view.update_embed_page()
 
         resp_message = await ctx.response.send_message(embed = view.embed, view = view)
