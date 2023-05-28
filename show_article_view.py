@@ -1,7 +1,7 @@
 from disnake import Message, Embed, ButtonStyle, MessageInteraction, Colour
 from disnake.ui import Button
 
-from utils import SHOWWCASE_LOGO, RedirectButton
+from utils import SHOWWCASE_LOGO, RedirectButton, convert_block_to_markdown
 from custom_view import CustomView
 from markdownify import markdownify
 from re import sub
@@ -44,10 +44,19 @@ class ShowArticleView(CustomView):
 
     def make_show_article(self):
 
-        show_article_content = self.show_article_data['content'][0]['lexicalBlock']['html']
-        show_article_markdown = markdownify(show_article_content, heading_style = 'ATX_CLOSED')
+        article_structure = self.show_article_data['structure'].lower()
+        show_article_content = None
 
-        show_article_markdown = sub('[#]{1,6}', '**', show_article_markdown)
+        if article_structure == 'lexical':
+            show_article_content = self.show_article_data['content'][0]['lexicalBlock']['html']
+
+        elif article_structure == 'markdown':
+            show_article_content = self.show_article_data['markdown']
+
+        elif article_structure == 'block':
+            show_article_content = convert_block_to_markdown(self.show_article_data['content'])
+
+        show_article_markdown = markdownify(show_article_content, heading_style = 'ATX')
         self.show_article_parts = show_article_markdown.split('\n\n')
 
         if len(self.show_article_parts) > 5:
