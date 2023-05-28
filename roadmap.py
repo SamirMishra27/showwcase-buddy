@@ -727,6 +727,10 @@ class Roadmap(commands.Cog):
         self.bot._Roadmap = self
 
     @commands.slash_command(name = 'roadmaps')
+    async def roadmaps_group_command(self, ctx: CommandInteraction):
+        pass
+
+    @roadmaps_group_command.sub_command(name = 'show')
     async def show_roadmaps(self, ctx: CommandInteraction):
         
         api_response = await self.bot.session.get('https://cache.showwcase.com/roadmaps')
@@ -739,7 +743,7 @@ class Roadmap(commands.Cog):
         resp_message = await ctx.send(embed = view.embed, view = view, ephemeral = False)
         await view.resolve_message(ctx, resp_message)
 
-    @commands.slash_command(name = 'roadmapslearn')
+    @roadmaps_group_command.sub_command(name = 'learn')
     async def learn_roadmap(
         self,
         interaction: CommandInteraction,
