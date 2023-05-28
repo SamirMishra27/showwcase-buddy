@@ -14,7 +14,7 @@ class RoadmapProgress:
         roadmap_id: int,
         roadmap_name: str
     ) -> None:
-        
+
         self.bot = bot
 
         self.user = user
@@ -40,7 +40,7 @@ class RoadmapProgress:
         user: Union[Member, User],
         sql_data: list
     ):
-        
+
         roadmap_id = sql_data[1]
         roadmap_name = sql_data[2]
 
@@ -61,10 +61,10 @@ class RoadmapProgress:
 
         query = '''
             INSERT INTO roadmaps(user_id, roadmap_id, roadmap_name,
-            completed_series, completed_posts, completion_percentage, is_finished
+            completed_series, completed_posts, completion_percentage, is_finished,
             started_at, last_updated_at) VALUES (?,?,?,?,?,?,?,?,?)
         '''
-        
+
         to_enter = (
             self.user_id,
             self.roadmap_id,

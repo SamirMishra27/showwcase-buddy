@@ -43,7 +43,7 @@ class RoadmapShowArticleView(ShowArticleView):
         self.roadmap_learning_view: RoadmapLearningView = roadmap_learning_view
 
     async def update_show_article_page(self):
-        super().update_show_article_page()
+        await super().update_show_article_page()
 
         if self.show_id in self.roadmap_learning_data.completed_shows:
             button = self.get_child_by(id = 'UPDATE_SHOW_STATUS')
@@ -320,7 +320,7 @@ class RoadmapLearningView(CustomView):
 
     async def read_curr_show_button(self, interaction: MessageInteraction):
 
-        view = ShowArticleView(
+        view = RoadmapShowArticleView(
             self.author, self.bot,
             self.current_show_id,
             self.current_show_api_data,
