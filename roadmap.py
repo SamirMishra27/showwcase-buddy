@@ -558,8 +558,9 @@ class RoadmapsView(CustomView):
             f'I wish you good luck!'
         )
 
-        await self.continue_roadmap_for_user(interaction)
         await interaction.followup.send(message, ephemeral = True)
+        await self.update_embed_page()
+        await self.message.edit(embed = self.embed, view = self)
 
     async def continue_roadmap_for_user(self, interaction: MessageInteraction):
 
