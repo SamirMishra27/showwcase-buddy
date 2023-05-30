@@ -37,7 +37,7 @@ class ShowArticleView(CustomView):
         self.make_show_article()
 
     async def interaction_check(self, interaction) -> bool:
-        if interaction.user.id == self.author.id and interaction.message.id == self.message.id:
+        if interaction.user.id == self.author.id:
             return True
         else:
             await interaction.response.send_message('This is not for you!', ephemeral = True)
