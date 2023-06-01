@@ -21,7 +21,7 @@ class CustomHelpCommand(commands.DefaultHelpCommand):
 
         list_of_app_commands_string = '- ' + '\n- '.join(command for command in list_of_app_commands)
         help_description = (
-            f'A discord bot to make browsing [Showwcase](https://www.showwcase.com/) nice, easier and convenient for Developers! <:coding:1108881842007986176>\n'
+            f'A discord bot to make browsing [Showwcase](https://www.showwcase.com/) nice, easier and convenient for Developers! <:coding:1111660183987437628>\n'
             f'### My Commands\n'
             f'{list_of_app_commands_string}'
         )

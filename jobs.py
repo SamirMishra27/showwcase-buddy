@@ -91,7 +91,7 @@ class JobsView(CustomView):
         if not isinstance(job_published_date, int):
             job_published_date = datetime.strptime(job_published_date, time_parse_format)
         else:
-            datetime.fromtimestamp(job_published_date / 1000)
+            job_published_date = datetime.fromtimestamp(job_published_date / 1000)
         job_info_updated_at = datetime.strptime(page_content['updatedAt'], time_parse_format)
 
         embed = Embed(
