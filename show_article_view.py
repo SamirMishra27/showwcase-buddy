@@ -105,11 +105,11 @@ class ShowArticleView(CustomView):
 
         self.enable_all_children()
 
-        if self.curr_page == 0:
+        if self.curr_page == 0 and self.get_child_by(id = 'PAGE_LEFT'):
             self.get_child_by(id = 'PAGE_LEFT').disabled = True
 
         max_pages = floor( (len(self.show_article_parts) - 1) / self.parts_per_page )
-        if self.curr_page == max_pages:
+        if self.curr_page == max_pages and self.get_child_by(id = 'PAGE_RIGHT'):
             self.get_child_by(id = 'PAGE_RIGHT').disabled = True
 
     async def teardown(self):

@@ -523,7 +523,7 @@ class RoadmapsView(CustomView):
         query = 'SELECT * FROM roadmaps WHERE user_id = (?) AND roadmap_id = (?)'
         results = await self.bot.db.execute_fetchall(query, (self.author.id, roadmap_id))
 
-        if not results:
+        if not results and not self.get_child_by(id = 'START_LEARNING'):
             self.remove_item(self.get_child_by(id = 'CONTINUE_LEARNING'))
 
             self.add_item(RedirectButton(
@@ -531,7 +531,7 @@ class RoadmapsView(CustomView):
                 'START_LEARNING', None, 2, 'start_roadmap_for_user'
             ))
 
-        else:
+        elif results and not self.get_child_by(id = 'CONTINUE_LEARNING'):
             self.remove_item(self.get_child_by(id = 'START_LEARNING'))
 
             self.add_item(RedirectButton(
