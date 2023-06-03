@@ -47,13 +47,13 @@ class ShowwcaseBuddyClient(commands.Bot):
             strip_after_prefix = True,
             
             allowed_mentions = disnake.AllowedMentions(everyone=False, users=True, roles=True, replied_user=False),
-            chunk_guilds_at_startup = True,
+            chunk_guilds_at_startup = False,
             reload = True,
         )
 
         self.version = '1.0'
         self.debug_channel = 995124307917279252
-        self.bot_extensions = ['jishaku', 'hackathon', 'roadmap', 'jobs', 'cogs.helpcommand']
+        self.bot_extensions = ['jishaku', 'hackathon', 'roadmap', 'jobs', 'cogs.helpcommand', 'cogs.shows', 'cogs.owner']
 
         self.launched_at = None
         self.session = ClientSession()
@@ -61,8 +61,7 @@ class ShowwcaseBuddyClient(commands.Bot):
         self.bot_is_ready = False
         self._disconnected = False
 
-        # self.activity = disnake.CustomActivity(name = 'Helping Showwcase Developers!')
-        self.activity = disnake.Activity(type = disnake.ActivityType.custom, name = 'Helping Showwcase Developers!')
+        self.activity = disnake.Activity(type = disnake.ActivityType.watching, name = 'Devs write awesome Shows!')
         self.loop.create_task(self.on_bot_start())
 
         ext_count = 0
@@ -79,8 +78,9 @@ class ShowwcaseBuddyClient(commands.Bot):
         print(f"Loaded {ext_count} of {len(self.bot_extensions)} Cogs.")
 
     async def on_bot_start(self):
-        
-        self.db = await aiosqlite.connect('showwcase_data.db')
+
+        db_path = f'showwcase_data_{stage}.db'
+        self.db = await aiosqlite.connect(db_path)
         print('Successfully established connection with database\n')
 
     async def on_ready(self):
