@@ -182,6 +182,13 @@ class Jobs(commands.Cog):
         job_type: str = commands.Param(default = 'NONE', name = 'type-of-job', choices = job_type_choices),
         job_role: str = commands.Param(default = 'NONE', name = 'type-of-role', choices = job_role_choices)
     ):
+        '''
+        Search for jobs on Showwcase!
+
+        parameters
+        ----------
+        job_type: The type of Job you are looking for, example: Full-time or Freelance
+        '''
 
         base_url = 'https://cache.showwcase.com/jobs'
         if job_type != 'NONE':
@@ -198,6 +205,9 @@ class Jobs(commands.Cog):
 
     @jobs_group_command.sub_command(name = 'recommended')
     async def recommended_jobs(self, ctx: CommandInteraction):
+        '''
+        See a list of recommended jobs by showwcase!
+        '''
 
         api_response = await self.bot.session.get('https://cache.showwcase.com/jobs/recommended')
         jobs_list = await api_response.json()

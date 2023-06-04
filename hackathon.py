@@ -128,9 +128,16 @@ class Hackathon(commands.Cog):
 
     @commands.slash_command(name = 'hackathons')
     async def show_hackathons(self, ctx: CommandInteraction):
+        '''
+        See the list of upcoming and ongoing hack-a-thons overview 
+        right from this command!
+        '''
         
         api_response = await self.bot.session.get('https://cache.showwcase.com/hackathons')
         data = await api_response.json()
+
+        if not len(data):
+            return await ctx.send('Uh-oh! There are no upcoming and ongoing Hack-a-thons right now! Check back later.', ephemeral = True)
         
         view = HackathonsView(ctx.author, self.bot, data)
         view.check_disability()

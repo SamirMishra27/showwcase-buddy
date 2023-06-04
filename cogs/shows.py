@@ -362,6 +362,9 @@ class Shows(commands.Cog):
 
     @shows_group_command.sub_command(name = 'trending')
     async def shows_trending(self, ctx: CommandInteraction):
+        '''
+        Trending show articles of Showwcase today!
+        '''
         
         api_response = await self.bot.session.get('https://cache.showwcase.com/projects/trending')
         shows_list = await api_response.json()
@@ -374,6 +377,9 @@ class Shows(commands.Cog):
 
     @shows_group_command.sub_command(name = 'recommended')
     async def shows_recommended(self, ctx: CommandInteraction):
+        '''
+        Recommended show articles of Showwcase today!
+        '''
 
         api_response = await self.bot.session.get('https://cache.showwcase.com/projects/recommended')
         shows_list = await api_response.json()
@@ -405,6 +411,9 @@ class Shows(commands.Cog):
 
     @shows_group_command.sub_command(name = 'myhistory')
     async def show_article_history(self, ctx: CommandInteraction):
+        '''
+        See your history of Showwcase shows that you've read on this bot!
+        '''
 
         query = 'SELECT * FROM post_history WHERE user_id == (?) ORDER BY readed_at_timestamp DESC'
         sql_data = await self.bot.db.execute_fetchall(query, (ctx.author.id,))

@@ -733,6 +733,9 @@ class Roadmap(commands.Cog):
 
     @roadmaps_group_command.sub_command(name = 'show')
     async def show_roadmaps(self, ctx: CommandInteraction):
+        '''
+        See a list of all Showwcase community's curated roadmaps to learn a new Skill!
+        '''
         
         api_response = await self.bot.session.get('https://cache.showwcase.com/roadmaps')
         data = await api_response.json()
@@ -752,7 +755,14 @@ class Roadmap(commands.Cog):
             name = 'roadmap-name',
             autocomplete = existing_roadmaps_autocomplete
         )
-    ):        
+    ):
+        '''
+        Continue learning from your existing roadmap progress!
+
+        parameters
+        ----------
+        roadmap_id: Name of roadmap
+        '''
         await self.send_learn_roadmap_view(interaction, interaction.author.id, roadmap_id, None)
 
     async def send_learn_roadmap_view(
