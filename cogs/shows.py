@@ -4,12 +4,18 @@ from disnake.ext import commands
 
 from show_article_view import ShowArticleView
 from custom_view import CustomView
+from asyncio import sleep as asyncio_sleep
 from utils import SHOWWCASE_LOGO
 from datetime import datetime
 from typing import List
 from math import ceil
 from urllib.parse import quote
 from traceback import print_exception
+from time import time
+from json import load
+from EdgeGPT import Chatbot, ConversationStyle
+with open('bing_cookies_main.json', 'r') as f:
+    cookies = load(f)
 
 class UserShowsHistory(CustomView):
 
@@ -183,6 +189,34 @@ class StandaloneShowArticleView(ShowArticleView):
 
         await self.update_show_article_page()
         await interaction.response.edit_message(embed = self.embed, view = self)
+
+    @button(
+        label = 'Summarize with AI', custom_id = 'USE_AI',
+        style = ButtonStyle.green, emoji = '✨', row = 1
+    )
+    async def summarize_post_with_ai_button(self, button: Button, interaction: MessageInteraction):
+
+        show_article_content = '\n\n'.join(self.show_article_parts)
+        prompt = 'Summarize the below article in under 100 words\n\n' + f'\"{show_article_content}\"'
+
+        output = ''
+        await interaction.response.defer()
+        time_since_defer = time()
+
+        bot = await Chatbot.create(cookies = cookies)
+        response = await bot.ask(prompt, conversation_style = ConversationStyle.precise)
+        output = response["item"]["messages"][1]["text"]
+
+        embed = Embed(colour = Colour.dark_purple(), description = output)
+        embed.set_author(
+            name = self.show_article_data['title'],
+            url = self.show_site_url,
+            icon_url = self.bot.user.display_avatar
+        )
+
+        if time() - time_since_defer < 3:
+            await asyncio_sleep(time() - time_since_defer)
+        await interaction.followup.send(embed = embed, ephemeral = True)
 
 class ShowsListView(CustomView):
 
